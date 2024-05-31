@@ -3,6 +3,8 @@
 converted_url=""
 effective_url=""
 project_id=""
+converted_url=""
+input_url=""
 is_redirected="false"
 
 convert_url() {
@@ -10,10 +12,10 @@ convert_url() {
     if [[ "$input_url" =~ ^git@gitlab\.com: ]]; then
         # Convert git URL to https
         local https_url="${input_url/git@gitlab.com:/https://gitlab.com/}"
-        echo "${https_url%.git}"
+        converted_url="${https_url%.git}"
     elif [[ "$input_url" =~ ^https://gitlab\.com/ ]]; then
         # Directly use the https URL
-        echo "${input_url%.git}"
+        converted_url="${input_url%.git}"
     else
         echo "Invalid URL format. Please provide a valid GitLab repository URL."
         exit 1
@@ -30,9 +32,6 @@ check_redirection() {
     if [[ $effective_url != $converted_url ]]; then
         effective_url="${effective_url%.git}"
         is_redirected="true"
-        echo "The URL is being redirected to: $effective_url"
-    else
-        echo "The URL is not being redirected."
     fi
 }
 
@@ -42,10 +41,9 @@ get_project_id() {
     response=$(curl -s -H "PRIVATE-TOKEN: $TOKEN" "$project_api_url")
     project_id=$(echo $response | jq '.id')
     if [[ $project_id == "null" ]]; then
-        echo "Failed to get project ID. Check your token and URL."
+        echo "$iput_url --> Failed to get project ID. Check your token and URL."
         exit 1
     fi
-    #echo "Project ID is: $project_id"
 }
 
 # Function to check if the repository is read-only
@@ -62,12 +60,8 @@ check_read_only() {
     archived=$(echo $response | jq '.archived')
 
     if [[ $archived == "true" ]]; then
-        echo "The repository is archived. This is the description:"
-        echo $(echo $response | jq '.description')
-        echo "If it is not helpful, contact the admin"
+        echo "$iput_url --> (Archived) Description: $(echo $response | jq '.description')"
         exit 1
-    else
-        echo "The repository is not read-only."
     fi
 }
 
@@ -100,6 +94,11 @@ if ! command -v git &> /dev/null; then
     exit 1
 fi
 
+# Check if the current directory is a Git repository
+if ! git rev-parse --is-inside-work-tree > /dev/null 2>&1; then
+    echo "Not git repository."
+fi
+
 
 TOKEN="$1"
 DRY_RUN="$2"
@@ -112,25 +111,21 @@ fi
 
 # Get input URL from Git origin
 input_url=$(git remote get-url origin)
-echo "Input URL: $input_url"
+convert_url "$input_url"
 
-converted_url=$(convert_url "$input_url")
-echo $converted_url
 check_redirection
 get_project_id
 check_read_only "$project_id"
 if [[ $is_redirected == "false" ]]; then
-    echo "Nothing to do".
+    echo "$input_url --> Nothing to do"
     exit 1
 fi
 original_url=$(convert_back_to_original "$effective_url" "$input_url")
-echo "New original URL: $original_url"
 
 if [[ $DRY_RUN == "--dry-run" ]]; then
-    echo "This is a dry run. The origin URL will not be updated."
-    echo "The original URL would be: $original_url"
+    echo "$input_url --> ($original_url)"
 else
     # Update the origin URL
     git remote set-url origin "$original_url"
-    echo "Updated the origin URL to: $original_url"
+    echo "$input_url --> $original_url"
 fi

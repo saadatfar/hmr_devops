@@ -13,7 +13,7 @@ DRY_RUN=$2
 for dir in */; do
   if [ -d "$dir" ]; then
     echo -n "$dir --> "
-    result=$(cd "$dir" && curl -s -H 'Cache-Control: no-cache' https://raw.githubusercontent.com/saadatfar/hmr_devops/main/migrate_helper.sh | bash -s "$TOKEN" $DRY_RUN)
+    result=$(cd "$dir" && curl -s https://raw.githubusercontent.com/saadatfar/hmr_devops/main/migrate_helper.sh?token=$(date +%s) | bash -s "$TOKEN" $DRY_RUN)
     echo "$result"
   fi
 done
